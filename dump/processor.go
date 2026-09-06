@@ -28,16 +28,24 @@ type TraceDocument struct {
 
 // SpanDocument is one span in a TraceDocument.
 type SpanDocument struct {
-	TraceID       string         `json:"trace_id"`
-	SpanID        string         `json:"span_id"`
-	ParentSpanID  string         `json:"parent_span_id,omitempty"`
-	Name          string         `json:"name"`
-	Kind          string         `json:"kind,omitempty"`
-	StatusCode    string         `json:"status_code"`
-	StatusMessage string         `json:"status_message,omitempty"`
-	StartTime     time.Time      `json:"start_time"`
-	EndTime       time.Time      `json:"end_time"`
-	Attributes    map[string]any `json:"attributes,omitempty"`
+	TraceID       string          `json:"trace_id"`
+	SpanID        string          `json:"span_id"`
+	ParentSpanID  string          `json:"parent_span_id,omitempty"`
+	Name          string          `json:"name"`
+	Kind          string          `json:"kind,omitempty"`
+	StatusCode    string          `json:"status_code"`
+	StatusMessage string          `json:"status_message,omitempty"`
+	StartTime     time.Time       `json:"start_time"`
+	EndTime       time.Time       `json:"end_time"`
+	Attributes    map[string]any  `json:"attributes,omitempty"`
+	Events        []EventDocument `json:"events,omitempty"`
+}
+
+// EventDocument is one span event in a SpanDocument.
+type EventDocument struct {
+	Name       string         `json:"name"`
+	Timestamp  time.Time      `json:"timestamp"`
+	Attributes map[string]any `json:"attributes,omitempty"`
 }
 
 type traceBuffer struct {
@@ -185,6 +193,9 @@ func (p *Processor) writeLocked(doc TraceDocument) {
 	}
 	d.Printf("olly dump: failure dump written trace_id=%s path=%s span_count=%d",
 		doc.TraceID, path, doc.SpanCount)
+	if p.cfg.OnWrite != nil {
+		p.cfg.OnWrite(path)
+	}
 	if err := Prune(p.cfg.Dir, p.cfg.MaxAgeHours, p.cfg.MaxFiles); err != nil {
 		d.Printf("olly dump: prune: %v", err)
 	}
@@ -212,7 +223,23 @@ func (p *Processor) snapshot(s sdktrace.ReadOnlySpan) SpanDocument {
 		StartTime:     s.StartTime().UTC(),
 		EndTime:       s.EndTime().UTC(),
 		Attributes:    p.attributesToMap(s.Attributes()),
+		Events:        p.snapshotEvents(s.Events()),
 	}
+}
+
+func (p *Processor) snapshotEvents(events []sdktrace.Event) []EventDocument {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]EventDocument, 0, len(events))
+	for _, ev := range events {
+		out = append(out, EventDocument{
+			Name:       ev.Name,
+			Timestamp:  ev.Time.UTC(),
+			Attributes: p.attributesToMap(ev.Attributes),
+		})
+	}
+	return out
 }
 
 func (p *Processor) attributesToMap(attrs []attribute.KeyValue) map[string]any {

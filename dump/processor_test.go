@@ -25,6 +25,55 @@ func (r *recordingDiag) Printf(format string, args ...any) {
 	r.msgs = append(r.msgs, fmt.Sprintf(format, args...))
 }
 
+func TestProcessorIncludesEventsAndOnWrite(t *testing.T) {
+	dir := t.TempDir()
+	var wrote string
+	proc := dump.NewProcessor(dump.Config{
+		Dir: dir,
+		OnWrite: func(path string) {
+			wrote = path
+		},
+		RedactAttribute: func(key string, value any) any {
+			if key == "token" {
+				return "REDACTED"
+			}
+			return value
+		},
+		Diagnostics: &recordingDiag{},
+	})
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(proc))
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+	tr := tp.Tracer("test")
+
+	_, server := tr.Start(context.Background(), "cmd", trace.WithSpanKind(trace.SpanKindServer))
+	server.AddEvent("exception", trace.WithAttributes(attribute.String("token", "secret")))
+	server.SetStatus(codes.Error, "failed")
+	server.End()
+	_ = tp.ForceFlush(context.Background())
+
+	if wrote == "" {
+		t.Fatal("expected OnWrite path")
+	}
+	body, err := os.ReadFile(wrote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc dump.TraceDocument
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Spans) != 1 || len(doc.Spans[0].Events) != 1 {
+		t.Fatalf("spans/events = %+v", doc.Spans)
+	}
+	ev := doc.Spans[0].Events[0]
+	if ev.Name != "exception" {
+		t.Fatalf("event name=%q", ev.Name)
+	}
+	if ev.Attributes["token"] != "REDACTED" {
+		t.Fatalf("token=%v", ev.Attributes["token"])
+	}
+}
+
 func TestProcessorDumpsOnEnvelopeError(t *testing.T) {
 	dir := t.TempDir()
 	diag := &recordingDiag{}

@@ -26,6 +26,8 @@ type Config struct {
 	RedactAttribute func(key string, value any) any
 	// RedactStatusText transforms status descriptions. Nil keeps text as-is.
 	RedactStatusText func(text string) string
+	// OnWrite is called after a dump file is successfully written (final path).
+	OnWrite func(path string)
 	// Diagnostics receives write/prune messages. Nil uses stderr.
 	Diagnostics Diagnostics
 }
