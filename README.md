@@ -60,4 +60,21 @@ defer shutdown(context.Background())
 
 ## Releases (for agents)
 
-Default bump on each releasable merge to `main` is **patch** (`vX.Y.(Z+1)`). Skip docs/chore/ci-only ranges and `[skip release]`. Consumers pin both the git checkout and `go.mod` to the same `v*` tag.
+olly is a Go library. Releases are **source tags** (`v*`) plus a GitHub Release from GoReleaser (`builds.skip: true`).
+
+**CI quality:** workflow `ci.yml` runs `go mod tidy` check, `gofmt`, `go vet`, `go test -race`, and `go build` on pushes and pull requests.
+
+**Auto patch on `main`:** every push to `main` that is not docs/chore/ci-only creates `vX.Y.(Z+1)` and publishes a release (workflow `auto-patch-release.yml`). Put `[skip release]` in the commit subject to opt out once.
+
+**Skip (no tag):** when every commit subject since the last `v*` tag is only `docs:`, `chore:`, or `ci:` (conventional prefixes).
+
+**Manual minor/major:** run workflow **Auto patch release** with `bump=minor` or `bump=major` (or push a `v*` tag yourself). Use major only for breaking public API changes.
+
+**After a new tag, consumer agents MUST pin:**
+
+```bash
+git -C providers/olly fetch --tags origin
+git -C providers/olly checkout "vX.Y.Z"
+go get github.com/behaviorengineering/olly@vX.Y.Z
+go mod tidy
+```
