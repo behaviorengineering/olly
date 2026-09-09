@@ -49,12 +49,14 @@ type EventDocument struct {
 }
 
 type traceBuffer struct {
-	spans    []SpanDocument
-	hasError bool
-	inFlight int
+	spans          []SpanDocument
+	hasError       bool // any span ERROR; used for Shutdown leftovers only
+	envelopeFailed bool // an envelope (SERVER) span ended with ERROR
+	inFlight       int
 }
 
-// Processor writes a JSON dump when process envelopes end and the buffer saw ERROR.
+// Processor writes a JSON dump when process envelopes complete with an envelope ERROR.
+// Child ERROR spans alone (for example a recovered LLM retry) do not dump a successful command.
 // Inbound spans may have a remote parent (client traceparent), so we do not wait for IsRoot().
 type Processor struct {
 	cfg    Config
@@ -90,7 +92,7 @@ func (p *Processor) OnStart(_ context.Context, s sdktrace.ReadWriteSpan) {
 	buf.inFlight++
 }
 
-// OnEnd records the span and dumps when envelopes complete with errors.
+// OnEnd records the span and dumps when envelopes complete with an envelope ERROR.
 func (p *Processor) OnEnd(s sdktrace.ReadOnlySpan) {
 	if p == nil || s == nil {
 		return
@@ -114,6 +116,9 @@ func (p *Processor) OnEnd(s sdktrace.ReadOnlySpan) {
 		buf.hasError = true
 	}
 	if isEnvelope {
+		if isError {
+			buf.envelopeFailed = true
+		}
 		buf.inFlight--
 		if buf.inFlight < 0 {
 			buf.inFlight = 0
@@ -123,7 +128,7 @@ func (p *Processor) OnEnd(s sdktrace.ReadOnlySpan) {
 		return
 	}
 	delete(p.traces, snap.TraceID)
-	if !buf.hasError {
+	if !buf.envelopeFailed {
 		return
 	}
 	p.writeLocked(TraceDocument{
