@@ -163,6 +163,34 @@ func TestProcessorSkipsSuccessfulTraces(t *testing.T) {
 	}
 }
 
+func TestProcessorSkipsRecoveredChildErrors(t *testing.T) {
+	dir := t.TempDir()
+	diag := &recordingDiag{}
+	proc := dump.NewProcessor(dump.Config{Dir: dir, Diagnostics: diag})
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(proc))
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+	tr := tp.Tracer("test")
+
+	ctx, server := tr.Start(context.Background(), "youtube.manage.add", trace.WithSpanKind(trace.SpanKindServer))
+	_, failed := tr.Start(ctx, "Predict.Context", trace.WithSpanKind(trace.SpanKindClient))
+	failed.SetStatus(codes.Error, "XML parsing failed")
+	failed.End()
+	_, okChild := tr.Start(ctx, "Predict.Context", trace.WithSpanKind(trace.SpanKindClient))
+	okChild.SetStatus(codes.Ok, "")
+	okChild.End()
+	server.SetStatus(codes.Ok, "")
+	server.End()
+	_ = tp.ForceFlush(context.Background())
+
+	entries, err := os.ReadDir(dir)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("dumps = %d, want 0 for recovered child errors; diag=%v", len(entries), diag.msgs)
+	}
+}
+
 func TestProcessorRemoteParentStillDumps(t *testing.T) {
 	dir := t.TempDir()
 	proc := dump.NewProcessor(dump.Config{Dir: dir, Diagnostics: &recordingDiag{}})
