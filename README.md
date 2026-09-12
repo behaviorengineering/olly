@@ -1,5 +1,7 @@
 # olly
 
+Agents: start at [AGENTS.md](AGENTS.md). Skills: [ai-copilots/](ai-copilots/).
+
 Portable OpenTelemetry helper for Behavior Engineering services.
 
 Module: `github.com/behaviorengineering/olly`.
