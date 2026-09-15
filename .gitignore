@@ -1,0 +1,3 @@
+# Finder metadata (must not dirty working trees / release checkouts).
+.DS_Store
+**/.DS_Store
