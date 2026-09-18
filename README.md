@@ -12,16 +12,30 @@ Apps map their own config and logger at the boundary, then call `olly.Init` once
 
 | Package | Role |
 |---------|------|
-| `olly` | Provider lifecycle (`Init`, `Shutdown`, `Flush`), sampling, W3C propagation |
+| `olly` | Provider lifecycle (`Init`, `Shutdown`, `Flush`), sampling, W3C propagation, env-aware OTLP (gRPC/HTTP) |
 | `olly/dump` | Buffer spans by `trace_id`; write JSON when SERVER envelopes end with ERROR |
 | `olly/errors` | Annotate spans from Go errors; expose trace/span IDs for logs |
+| `olly/http` | `WrapHandler`, `Middleware`, `WrapTransport`, `Client` (otelhttp) |
+| `olly/cli` | `AddFlags`, `ConfigFromEnv`, `Run`, `Lifecycle` (stdlib `flag` only) |
 
 ## What stays in the app
 
-- Service names, operation taxonomies, HTTP wrappers
+- Service names, operation taxonomies, product-specific span attributes
 - Redaction of product-specific attributes (pass dump hooks)
 - Business metrics and logger implementations
 - Pipeline execution records (`strop/runreport`)
+
+## Environment (OTLP)
+
+When Config fields are empty, `Init` / `Resolve` read the OpenTelemetry env contract:
+
+- `OTEL_SERVICE_NAME`
+- `OTEL_RESOURCE_ATTRIBUTES` (comma-separated `k=v`)
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (wins) / `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` (wins) / `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` or `http/protobuf`)
+- `OTEL_EXPORTER_OTLP_TRACES_HEADERS` (wins) / `OTEL_EXPORTER_OTLP_HEADERS` (comma-separated `k=v`)
+
+Empty `OTLPEndpoint` after env resolution still means dump-only (no OTLP). Use constant `DefaultOTLPEndpoint` (`localhost:4319`, Polypus HyperDX gRPC) from apps or `cli.ConfigFromEnv`.
 
 ## Failure dumps
 
@@ -47,7 +61,7 @@ import (
 shutdown, err := olly.Init(olly.Config{
     Enabled:      true,
     ServiceName:  "my-service",
-    OTLPEndpoint: "localhost:4317", // empty = dump-only / no OTLP
+    OTLPEndpoint: olly.DefaultOTLPEndpoint, // empty = dump-only / no OTLP
     Dump: dump.Config{
         Dir:         "logs/failures",
         MaxAgeHours: 48,
@@ -58,6 +72,41 @@ if err != nil {
     return err
 }
 defer shutdown(context.Background())
+```
+
+### HTTP (one line)
+
+```go
+import ollyhttp "github.com/behaviorengineering/olly/http"
+
+handler = ollyhttp.WrapHandler(mux, "my-service")
+client := ollyhttp.Client(http.DefaultClient, "my-service")
+```
+
+### CLI (stdlib)
+
+```go
+import ollicli "github.com/behaviorengineering/olly/cli"
+
+cfg := ollicli.ConfigFromEnv("my-cli")
+ollicli.AddFlags(flag.CommandLine, &cfg)
+flag.Parse()
+os.Exit(ollicli.Run(context.Background(), cfg, run))
+```
+
+### Cobra (no dependency)
+
+```go
+var otelLife *ollicli.Lifecycle
+
+root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+    var err error
+    otelLife, err = ollicli.Start(ollicli.ConfigFromEnv(cmd.Root().Name()))
+    return err
+}
+root.PersistentPostRunE = func(cmd *cobra.Command, _ []string) error {
+    return otelLife.Stop(cmd.Context())
+}
 ```
 
 ## Releases (for agents)
