@@ -3,12 +3,15 @@ package olly
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/behaviorengineering/olly/dump"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -24,8 +27,11 @@ var (
 
 // Init installs the global TracerProvider, W3C propagator, optional OTLP exporter,
 // and optional failure-dump processor. Returns a shutdown function.
+//
+// Environment fallbacks (when Config fields are empty) follow the OpenTelemetry
+// spec names; see Config and Config.Resolve.
 func Init(cfg Config) (func(context.Context) error, error) {
-	cfg = cfg.Defaults()
+	cfg = cfg.Resolve()
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
@@ -79,10 +85,7 @@ func Init(cfg Config) (func(context.Context) error, error) {
 	if cfg.OTLPEndpoint != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.OTLPTimeout)
 		defer cancel()
-		exporter, expErr := otlptracegrpc.New(ctx,
-			otlptracegrpc.WithEndpoint(cfg.OTLPEndpoint),
-			otlptracegrpc.WithInsecure(),
-		)
+		exporter, expErr := newOTLPExporter(ctx, cfg)
 		if expErr != nil {
 			if !cfg.AllowOTLPFailure {
 				return nil, fmt.Errorf("olly: otlp exporter: %w", expErr)
@@ -101,6 +104,38 @@ func Init(cfg Config) (func(context.Context) error, error) {
 	setProvider(tp)
 	setShutdown(tp.Shutdown)
 	return Shutdown, nil
+}
+
+func newOTLPExporter(ctx context.Context, cfg Config) (*otlptrace.Exporter, error) {
+	insecure := deriveInsecure(cfg.OTLPEndpoint, cfg.Insecure)
+	switch cfg.Protocol {
+	case ProtocolHTTP:
+		opts := []otlptracehttp.Option{}
+		ep := strings.TrimSpace(cfg.OTLPEndpoint)
+		if strings.Contains(ep, "://") {
+			opts = append(opts, otlptracehttp.WithEndpointURL(ep))
+		} else {
+			opts = append(opts, otlptracehttp.WithEndpoint(stripEndpointScheme(ep)))
+			if insecure {
+				opts = append(opts, otlptracehttp.WithInsecure())
+			}
+		}
+		if len(cfg.Headers) > 0 {
+			opts = append(opts, otlptracehttp.WithHeaders(cfg.Headers))
+		}
+		return otlptracehttp.New(ctx, opts...)
+	default:
+		opts := []otlptracegrpc.Option{
+			otlptracegrpc.WithEndpoint(stripEndpointScheme(cfg.OTLPEndpoint)),
+		}
+		if insecure {
+			opts = append(opts, otlptracegrpc.WithInsecure())
+		}
+		if len(cfg.Headers) > 0 {
+			opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
+		}
+		return otlptracegrpc.New(ctx, opts...)
+	}
 }
 
 // Shutdown shuts down the provider installed by Init.

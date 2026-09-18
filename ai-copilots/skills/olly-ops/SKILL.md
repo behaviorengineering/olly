@@ -2,14 +2,15 @@
 name: olly-ops
 description: >-
   Operate the olly OpenTelemetry helper (github.com/behaviorengineering/olly).
-  Use when Init/Shutdown, failure dumps, OTLP, or pinning olly as a dependency.
+  Use when Init/Shutdown, failure dumps, OTLP, HTTP middleware, CLI Run helpers,
+  or pinning olly as a dependency.
 ---
 
 # olly
 
 **Module:** `github.com/behaviorengineering/olly` · **README:** [README.md](../../../README.md)
 
-Apps map config and logger at the boundary, then call `olly.Init` once. olly owns the global tracer provider, optional OTLP export, and optional local failure-trace dumps.
+Apps map config and logger at the boundary, then call `olly.Init` once. olly owns the global tracer provider, optional OTLP export, local failure-trace dumps, `olly/http` middleware, and `olly/cli` Run helpers.
 
 ## Commands
 
@@ -27,9 +28,12 @@ make tidy
 shutdown, err := olly.Init(olly.Config{
     Enabled:      true,
     ServiceName:  "my-service",
-    OTLPEndpoint: "localhost:4317", // empty = dump-only
+    OTLPEndpoint: olly.DefaultOTLPEndpoint, // localhost:4319 HyperDX; empty = dump-only
     Dump: dump.Config{Dir: "logs/failures", MaxAgeHours: 48, MaxFiles: 20},
 })
+
+handler = ollyhttp.WrapHandler(mux, "my-service")
+os.Exit(ollicli.Run(ctx, ollicli.ConfigFromEnv("my-cli"), run))
 ```
 
 ## Pin after a release tag
