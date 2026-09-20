@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/behaviorengineering/olly/dump"
+	"github.com/behaviorengineering/olly/pkg/dump"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )

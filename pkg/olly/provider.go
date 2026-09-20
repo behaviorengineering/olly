@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/behaviorengineering/olly/dump"
+	"github.com/behaviorengineering/olly/pkg/dump"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -166,7 +166,7 @@ func Flush(ctx context.Context) error {
 // Tracer returns a named tracer from the global provider.
 func Tracer(instrumentationName string) trace.Tracer {
 	if instrumentationName == "" {
-		instrumentationName = "github.com/behaviorengineering/olly"
+		instrumentationName = "github.com/behaviorengineering/olly/pkg/olly"
 	}
 	return otel.Tracer(instrumentationName)
 }

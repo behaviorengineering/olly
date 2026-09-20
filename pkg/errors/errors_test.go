@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	ollyerrors "github.com/behaviorengineering/olly/errors"
+	ollyerrors "github.com/behaviorengineering/olly/pkg/errors"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"

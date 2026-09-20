@@ -12,11 +12,11 @@ Apps map their own config and logger at the boundary, then call `olly.Init` once
 
 | Package | Role |
 |---------|------|
-| `olly` | Provider lifecycle (`Init`, `Shutdown`, `Flush`), sampling, W3C propagation, env-aware OTLP (gRPC/HTTP) |
-| `olly/dump` | Buffer spans by `trace_id`; write JSON when SERVER envelopes end with ERROR |
-| `olly/errors` | Annotate spans from Go errors; expose trace/span IDs for logs |
-| `olly/http` | `WrapHandler`, `Middleware`, `WrapTransport`, `Client` (otelhttp) |
-| `olly/cli` | `AddFlags`, `ConfigFromEnv`, `Run`, `Lifecycle` (stdlib `flag` only) |
+| `pkg/olly` | Provider lifecycle (`Init`, `Shutdown`, `Flush`), sampling, W3C propagation, env-aware OTLP (gRPC/HTTP) |
+| `pkg/dump` | Buffer spans by `trace_id`; write JSON when SERVER envelopes end with ERROR |
+| `pkg/errors` | Annotate spans from Go errors; expose trace/span IDs for logs |
+| `pkg/http` | `WrapHandler`, `Middleware`, `WrapTransport`, `Client` (otelhttp) |
+| `pkg/cli` | `AddFlags`, `ConfigFromEnv`, `Run`, `Lifecycle` (stdlib `flag` only) |
 
 ## What stays in the app
 
@@ -54,8 +54,8 @@ Successful traces are not written. Retention is by max age and max files.
 import (
     "context"
 
-    "github.com/behaviorengineering/olly"
-    "github.com/behaviorengineering/olly/dump"
+    "github.com/behaviorengineering/olly/pkg/olly"
+    "github.com/behaviorengineering/olly/pkg/dump"
 )
 
 shutdown, err := olly.Init(olly.Config{
@@ -77,7 +77,7 @@ defer shutdown(context.Background())
 ### HTTP (one line)
 
 ```go
-import ollyhttp "github.com/behaviorengineering/olly/http"
+import ollyhttp "github.com/behaviorengineering/olly/pkg/http"
 
 handler = ollyhttp.WrapHandler(mux, "my-service")
 client := ollyhttp.Client(http.DefaultClient, "my-service")
@@ -86,7 +86,7 @@ client := ollyhttp.Client(http.DefaultClient, "my-service")
 ### CLI (stdlib)
 
 ```go
-import ollicli "github.com/behaviorengineering/olly/cli"
+import ollicli "github.com/behaviorengineering/olly/pkg/cli"
 
 cfg := ollicli.ConfigFromEnv("my-cli")
 ollicli.AddFlags(flag.CommandLine, &cfg)

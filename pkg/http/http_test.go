@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	ollyhttp "github.com/behaviorengineering/olly/http"
+	ollyhttp "github.com/behaviorengineering/olly/pkg/http"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
