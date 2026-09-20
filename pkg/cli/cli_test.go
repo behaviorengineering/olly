@@ -6,8 +6,8 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/behaviorengineering/olly"
-	ollicli "github.com/behaviorengineering/olly/cli"
+	"github.com/behaviorengineering/olly/pkg/olly"
+	ollicli "github.com/behaviorengineering/olly/pkg/cli"
 )
 
 func TestConfigFromEnvDefaultsEndpoint(t *testing.T) {

@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/behaviorengineering/olly"
-	ollyerrors "github.com/behaviorengineering/olly/errors"
+	"github.com/behaviorengineering/olly/pkg/olly"
+	ollyerrors "github.com/behaviorengineering/olly/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )

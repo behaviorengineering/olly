@@ -3,7 +3,7 @@ package olly_test
 import (
 	"testing"
 
-	"github.com/behaviorengineering/olly"
+	"github.com/behaviorengineering/olly/pkg/olly"
 )
 
 func TestResolveTracesEndpointWins(t *testing.T) {

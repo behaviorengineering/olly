@@ -10,7 +10,9 @@ description: >-
 
 **Module:** `github.com/behaviorengineering/olly` · **README:** [README.md](../../../README.md)
 
-Apps map config and logger at the boundary, then call `olly.Init` once. olly owns the global tracer provider, optional OTLP export, local failure-trace dumps, `olly/http` middleware, and `olly/cli` Run helpers.
+Apps map config and logger at the boundary, then call `olly.Init` once. olly owns the global tracer provider, optional OTLP export, local failure-trace dumps, `pkg/http` middleware, and `pkg/cli` Run helpers.
+
+Public imports: `github.com/behaviorengineering/olly/pkg/olly`, `.../pkg/dump`, `.../pkg/errors`, `.../pkg/http`, `.../pkg/cli`.
 
 ## Commands
 
