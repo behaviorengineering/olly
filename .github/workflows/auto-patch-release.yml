@@ -1,8 +1,9 @@
 # Auto patch release (agent-oriented)
 #
 # On every push to main, create vX.Y.(Z+1) and publish a source GitHub Release
-# via GoReleaser, unless the commits since the last tag are only docs/chore/ci
-# (or the commit subject contains [skip release]).
+# via GoReleaser, unless the commits since the last tag are only docs/chore/ci,
+# only agent-harness paths (.cursor/, lefthook.yml), only packaging paths,
+# or the commit subject contains [skip release].
 #
 # Manual bump (minor/major/patch): workflow_dispatch.
 # Existing release.yml still runs if a human pushes a v* tag with a token that
@@ -66,8 +67,10 @@ jobs:
             if [[ "${last_tag}" == "v0.0.0" ]]; then
               range="HEAD"
               subjects="$(git log -1 --pretty=%s)"
+              files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
             else
               subjects="$(git log --pretty=%s "${range}")"
+              files="$(git diff --name-only "${last_tag}" HEAD)"
             fi
             if [[ -z "${subjects}" ]]; then
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -96,6 +99,47 @@ jobs:
               echo "skip=true" >> "$GITHUB_OUTPUT"
               echo "reason=only docs/chore/ci commits since ${last_tag}" >> "$GITHUB_OUTPUT"
               exit 0
+            fi
+
+            # Keep in sync with cursor-packs scripts/auto-patch-decide.sh
+            is_harness_only_path() {
+              local path="$1"
+              [[ "${path}" == lefthook.yml ]] && return 0
+              [[ "${path}" == .cursor/* ]] && return 0
+              return 1
+            }
+            is_packaging_only_path() {
+              local path="$1"
+              case "${path}" in
+                Dockerfile|Dockerfile.*) return 0 ;;
+                scripts/docker-*) return 0 ;;
+                scripts/ci/docker-*) return 0 ;;
+                scripts/ci/switchyard-smoke-routes.toml) return 0 ;;
+                .github/workflows/docker-release.yml|.github/workflows/packaging-rebuild.yml) return 0 ;;
+              esac
+              return 1
+            }
+            if [[ -n "${files}" ]]; then
+              harness_only="true"
+              while IFS= read -r f; do
+                [[ -z "${f}" ]] && continue
+                if ! is_harness_only_path "${f}"; then harness_only="false"; break; fi
+              done <<< "${files}"
+              if [[ "${harness_only}" == "true" ]]; then
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                echo "reason=only agent-harness paths since ${last_tag} (.cursor/, lefthook.yml)" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              packaging_only="true"
+              while IFS= read -r f; do
+                [[ -z "${f}" ]] && continue
+                if ! is_packaging_only_path "${f}"; then packaging_only="false"; break; fi
+              done <<< "${files}"
+              if [[ "${packaging_only}" == "true" ]]; then
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                echo "reason=packaging-only (use Docker release -rN)" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
             fi
           fi
 
