@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/behaviorengineering/olly/pkg/olly"
 	"github.com/behaviorengineering/olly/pkg/dump"
+	"github.com/behaviorengineering/olly/pkg/olly"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
