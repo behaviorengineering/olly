@@ -81,6 +81,7 @@ import ollyhttp "github.com/behaviorengineering/olly/pkg/http"
 
 handler = ollyhttp.WrapHandler(mux, "my-service")
 client := ollyhttp.Client(http.DefaultClient, "my-service")
+client = ollyhttp.Client(http.DefaultClient, "my-service", ollyhttp.WithResilience()) // outbound retry + breaker; ctx must have a deadline
 ```
 
 ### CLI (stdlib)
