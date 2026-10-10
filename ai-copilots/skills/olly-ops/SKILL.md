@@ -35,6 +35,7 @@ shutdown, err := olly.Init(olly.Config{
 })
 
 handler = ollyhttp.WrapHandler(mux, "my-service")
+client := ollyhttp.Client(http.DefaultClient, "my-service", ollyhttp.WithResilience()) // retry/breaker; request ctx needs a deadline
 os.Exit(ollicli.Run(ctx, ollicli.ConfigFromEnv("my-cli"), run))
 ```
 

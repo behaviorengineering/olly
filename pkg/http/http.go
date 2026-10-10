@@ -20,9 +20,11 @@ var DefaultSkipPaths = []string{"/health", "/healthz", "/metrics"}
 type Option func(*options)
 
 type options struct {
-	skipPaths []string
-	spanNamer func(operation string, r *http.Request) string
-	attrs     []trace.SpanStartOption
+	skipPaths        []string
+	spanNamer        func(operation string, r *http.Request) string
+	attrs            []trace.SpanStartOption
+	resilience       bool
+	resiliencePolicy resiliencePolicy
 }
 
 // WithSkipPaths replaces the default server skip list.
@@ -49,7 +51,8 @@ func WithSpanOptions(opts ...trace.SpanStartOption) Option {
 
 func applyOptions(opts []Option) options {
 	o := options{
-		skipPaths: append([]string(nil), DefaultSkipPaths...),
+		skipPaths:        append([]string(nil), DefaultSkipPaths...),
+		resiliencePolicy: defaultResiliencePolicy(),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -157,11 +160,17 @@ func WrapTransport(base http.RoundTripper, serviceName string, opts ...Option) h
 
 // Client returns a shallow copy of c with an instrumented Transport.
 // A nil client is treated as &http.Client{}.
+// Pass WithResilience to add outbound retry and circuit breaking (requires request context deadlines).
 func Client(c *http.Client, serviceName string, opts ...Option) *http.Client {
 	if c == nil {
 		c = &http.Client{}
 	}
+	o := applyOptions(opts)
 	out := *c
-	out.Transport = WrapTransport(c.Transport, serviceName, opts...)
+	if o.resilience {
+		out.Transport = WrapOutboundTransport(c.Transport, serviceName, opts...)
+	} else {
+		out.Transport = WrapTransport(c.Transport, serviceName, opts...)
+	}
 	return &out
 }
