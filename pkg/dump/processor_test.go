@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -139,6 +140,52 @@ func TestProcessorDumpsOnEnvelopeError(t *testing.T) {
 	}
 	if !foundSecret {
 		t.Fatal("expected secret attribute in dump")
+	}
+}
+
+func TestProcessorWritesOwnerOnlyDumps(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "failures")
+	var wrote string
+	proc := dump.NewProcessor(dump.Config{
+		Dir:         dir,
+		OnWrite:     func(path string) { wrote = path },
+		Diagnostics: &recordingDiag{},
+	})
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(proc))
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+	tr := tp.Tracer("test")
+
+	_, server := tr.Start(context.Background(), "cmd", trace.WithSpanKind(trace.SpanKindServer))
+	server.SetStatus(codes.Error, "failed")
+	server.End()
+	_ = tp.ForceFlush(context.Background())
+
+	if wrote == "" {
+		t.Fatal("expected OnWrite path")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(wrote) {
+		t.Fatalf("entries = %v, want only %s (no temp files left)", entries, filepath.Base(wrote))
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o700 {
+		t.Fatalf("dir mode = %o, want 700", got)
+	}
+	fileInfo, err := os.Stat(wrote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fileInfo.Mode().Perm(); got != 0o600 {
+		t.Fatalf("file mode = %o, want 600", got)
 	}
 }
 

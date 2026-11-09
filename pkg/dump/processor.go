@@ -48,6 +48,11 @@ type EventDocument struct {
 	Attributes map[string]any `json:"attributes,omitempty"`
 }
 
+// dumpDirMode keeps the dump directory owner-only: dumps hold prompts, model
+// output and repository content. Dump files are 0o600, the mode os.CreateTemp
+// applies (see writeTemp).
+const dumpDirMode os.FileMode = 0o700
+
 type traceBuffer struct {
 	spans          []SpanDocument
 	hasError       bool // any span ERROR; used for Shutdown leftovers only
@@ -176,18 +181,20 @@ func (p *Processor) writeLocked(doc TraceDocument) {
 	})
 	doc.SpanCount = len(doc.Spans)
 	d := diag(p.cfg.Diagnostics)
-	if err := os.MkdirAll(p.cfg.Dir, 0o750); err != nil {
+	// Dumps hold prompts, model output and repository content, so the
+	// directory and files are owner-only.
+	if err := os.MkdirAll(p.cfg.Dir, dumpDirMode); err != nil {
 		d.Printf("olly dump: mkdir: %v", err)
 		return
 	}
 	path := filepath.Join(p.cfg.Dir, doc.TraceID+".json")
-	tmp := path + ".tmp"
 	body, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		d.Printf("olly dump: encode: %v", err)
 		return
 	}
-	if err := os.WriteFile(tmp, body, 0o640); err != nil {
+	tmp, err := writeTemp(p.cfg.Dir, doc.TraceID, body)
+	if err != nil {
 		d.Printf("olly dump: write: %v", err)
 		return
 	}
@@ -204,6 +211,28 @@ func (p *Processor) writeLocked(doc TraceDocument) {
 	if err := Prune(p.cfg.Dir, p.cfg.MaxAgeHours, p.cfg.MaxFiles); err != nil {
 		d.Printf("olly dump: prune: %v", err)
 	}
+}
+
+// writeTemp writes body to a new, uniquely named temp file in dir and returns
+// its path. os.CreateTemp opens with O_EXCL and mode 0o600, so
+// a stale temp file left by an earlier crash can never pass a wider mode on
+// to a dump through the rename.
+func writeTemp(dir, traceID string, body []byte) (string, error) {
+	f, err := os.CreateTemp(dir, traceID+".*.tmp")
+	if err != nil {
+		return "", err
+	}
+	name := f.Name()
+	if _, err := f.Write(body); err != nil {
+		_ = f.Close()
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	return name, nil
 }
 
 func (p *Processor) snapshot(s sdktrace.ReadOnlySpan) SpanDocument {
