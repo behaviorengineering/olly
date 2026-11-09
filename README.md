@@ -48,6 +48,8 @@ Default completion policy (one mode for gateway and CLI):
 
 Successful traces are not written. Retention is by max age and max files.
 
+Dumps hold prompts, model output and repository content, so they are owner-only: olly creates the dump directory with mode `0700` and writes each dump with mode `0600` (through a fresh temp file, then a rename). A directory that already exists keeps its mode, so tighten it yourself if an older olly created it as `0750`.
+
 ## Quick start
 
 ```go

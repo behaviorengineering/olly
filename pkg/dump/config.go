@@ -15,6 +15,9 @@ const DefaultEnvelopeKind = trace.SpanKindServer
 // Config controls the failure-dump SpanProcessor.
 type Config struct {
 	// Dir is the output directory. Empty disables the processor when used via olly.Init.
+	// Dumps hold prompts, model output and repository content, so the processor
+	// creates Dir with mode 0o700 and writes each dump with mode 0o600. An
+	// existing Dir keeps its mode.
 	Dir string
 	// MaxAgeHours prunes dumps older than this. Zero skips age pruning.
 	MaxAgeHours int
